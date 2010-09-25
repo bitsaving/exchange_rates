@@ -1,6 +1,6 @@
 require 'net/http'
 require 'uri'
-require 'hpricot'
+require 'nokogiri'
 
 class ExchangeRates < ActiveRecord::Base
   serialize :fields
@@ -52,16 +52,18 @@ class ExchangeRates < ActiveRecord::Base
     def load_data
       url = URI.parse URL
       respond = Net::HTTP.get url
-      doc = Hpricot::XML(respond)
+      doc = Nokogiri::XML(respond)
       parse_data(doc)
     end
 
     def parse_data(doc)
-      @date = Date.parse doc.at(:ValCurs)[:Date]
-      (doc/'ValCurs/Valute').each do |valute|
-        code = (valute/:CharCode).html.to_sym
+      @date = Date.parse doc.xpath("//ValCurs").attr("Date").to_s
+      doc.xpath("//ValCurs/Valute").each do |valute|
+        code = valute.xpath("./CharCode").text.to_sym
         @fields[code] = {}
-        @fields[code][:value] = (valute/:Value).html.gsub(',','.').to_f
+        @fields[code][:value] = valute.xpath("./Value").text.gsub(',','.').to_f
+        @fields[code][:name] = valute.xpath("./Name").text
+        @fields[code][:nominal] = valute.xpath("./Nominal").text
       end
     end
   end
